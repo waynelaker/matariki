@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Names — Matariki Games</title>
+  <meta name="description" content="Match the te reo Māori names to the nine stars of Matariki.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="back-link" id="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back
+      </a>
+      <span class="header-title">Game One</span>
+    </div>
+  </header>
+
+  <div class="game-area">
+    <div class="container">
+
+      <div class="game-status">
+        <h1 class="game-title-small" style="color: var(--accent-gold);">Star Names</h1>
+        <p class="game-instruction" id="instruction">
+          Drag each name onto its matching star — or tap a name, then tap a star
+        </p>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">
+          <span id="match-count">0</span> / 9 matched
+        </div>
+      </div>
+
+      <div class="game-main">
+        <!-- Star cluster -->
+        <div class="game-cluster-wrap">
+          <div id="cluster" class="cluster-container"></div>
+        </div>
+
+        <!-- Name tags sidebar -->
+        <div class="game-sidebar">
+          <div class="name-tags-panel" id="name-tags">
+            <div class="name-tags-title">Star Names</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Success overlay -->
+<div class="message-overlay" id="success-overlay">
+  <div class="message-box">
+    <div class="message-emoji">🌟</div>
+    <h2 class="message-title" style="color: var(--accent-gold);">Ka Rawe!</h2>
+    <p class="message-text">
+      You matched all nine stars of Matariki!<br>
+      Each star has its own special meaning and connection to the natural world.
+    </p>
+    <button class="btn btn-primary btn-large" id="btn-play-again" onclick="location.reload()">Play Again</button>
+    <div style="margin-top:16px;">
+      <a href="index.html" style="font-size:0.9rem;">Back to menu</a>
+    </div>
+  </div>
+</div>
+
+<script src="stars.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // --- State ---
+  var matched = {};          // starId -> true
+  var matchCount = 0;
+  var selectedTag = null;    // currently selected name-tag element
+  var dragging = null;       // { el, ghost, starId(name) }
+
+  // --- Init ---
+  createStarField();
+  createCluster('cluster', {
+    interactive: true,
+    onStarClick: handleStarClick,
+    baseSize: 6,
+    maxSize: 18
+  });
+
+  // Build shuffled name tags
+  var panel = document.getElementById('name-tags');
+  var shuffled = shuffleArray(MATARIKI_STARS);
+
+  shuffled.forEach(function (star) {
+    var tag = document.createElement('div');
+    tag.className = 'name-tag';
+    tag.id = 'tag-' + star.id;
+    tag.dataset.starId = star.id;
+    tag.textContent = star.name;
+    tag.setAttribute('role', 'button');
+    tag.tabIndex = 0;
+
+    // Click/tap to select
+    tag.addEventListener('click', function (e) {
+      e.stopPropagation();
+      selectTag(tag);
+    });
+    tag.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        selectTag(tag);
+      }
+    });
+
+    // Drag start (mouse)
+    tag.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      startDrag(tag, e.clientX, e.clientY);
+    });
+
+    // Drag start (touch)
+    tag.addEventListener('touchstart', function (e) {
+      var touch = e.touches[0];
+      startDrag(tag, touch.clientX, touch.clientY);
+    }, { passive: true });
+
+    panel.appendChild(tag);
+  });
+
+  // --- Drag logic ---
+
+  function startDrag(tag, x, y) {
+    if (tag.classList.contains('matched')) return;
+    clearSelection();
+
+    var ghost = document.createElement('div');
+    ghost.className = 'name-tag-ghost';
+    ghost.textContent = tag.textContent;
+    ghost.style.left = x + 'px';
+    ghost.style.top = y + 'px';
+    document.body.appendChild(ghost);
+
+    tag.style.opacity = '0.3';
+
+    dragging = { el: tag, ghost: ghost, starId: tag.dataset.starId };
+
+    // Show drop targets
+    MATARIKI_STARS.forEach(function (s) {
+      if (!matched[s.id]) {
+        var starEl = document.getElementById('star-' + s.id);
+        if (starEl) starEl.classList.add('drop-target');
+      }
+    });
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    dragging.ghost.style.left = e.clientX + 'px';
+    dragging.ghost.style.top  = e.clientY + 'px';
+    highlightDropTarget(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    var touch = e.touches[0];
+    dragging.ghost.style.left = touch.clientX + 'px';
+    dragging.ghost.style.top  = touch.clientY + 'px';
+    highlightDropTarget(touch.clientX, touch.clientY);
+  }, { passive: true });
+
+  document.addEventListener('mouseup', function (e) {
+    if (!dragging) return;
+    endDrag(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('touchend', function (e) {
+    if (!dragging) return;
+    // Use last known position from ghost
+    var rect = dragging.ghost.getBoundingClientRect();
+    endDrag(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  });
+
+  function highlightDropTarget(x, y) {
+    // remove previous hover
+    document.querySelectorAll('.star.drop-hover').forEach(function (el) {
+      el.classList.remove('drop-hover');
+    });
+
+    var target = findStarAt(x, y);
+    if (target) {
+      target.classList.add('drop-hover');
+    }
+  }
+
+  function endDrag(x, y) {
+    if (!dragging) return;
+    var tag = dragging.el;
+    var nameStarId = dragging.starId;
+    var ghost = dragging.ghost;
+
+    // Remove ghost
+    ghost.remove();
+    tag.style.opacity = '';
+
+    // Clear drop targets
+    document.querySelectorAll('.star.drop-target, .star.drop-hover').forEach(function (el) {
+      el.classList.remove('drop-target', 'drop-hover');
+    });
+
+    // Check if dropped on a star
+    var starEl = findStarAt(x, y);
+    if (starEl) {
+      var targetStarId = starEl.dataset.starId;
+      if (targetStarId === nameStarId) {
+        markCorrect(nameStarId, tag, starEl);
+      } else {
+        markWrong(tag);
+      }
+    }
+
+    dragging = null;
+  }
+
+  function findStarAt(x, y) {
+    var best = null;
+    var bestDist = Infinity;
+
+    MATARIKI_STARS.forEach(function (star) {
+      if (matched[star.id]) return;
+      var el = document.getElementById('star-' + star.id);
+      if (!el) return;
+      var rect = el.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var dist = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+      // Use a generous hit area (star size + padding)
+      var hitRadius = Math.max(rect.width, 30) * 1.2;
+      if (dist < hitRadius && dist < bestDist) {
+        bestDist = dist;
+        best = el;
+      }
+    });
+
+    return best;
+  }
+
+  // --- Tap-to-select, tap-to-place ---
+
+  function selectTag(tag) {
+    if (tag.classList.contains('matched')) return;
+    clearSelection();
+    tag.classList.add('selected');
+    selectedTag = tag;
+  }
+
+  function clearSelection() {
+    if (selectedTag) {
+      selectedTag.classList.remove('selected');
+      selectedTag = null;
+    }
+  }
+
+  function handleStarClick(starId, starEl) {
+    if (matched[starId]) return;
+
+    if (selectedTag) {
+      var nameStarId = selectedTag.dataset.starId;
+      if (nameStarId === starId) {
+        markCorrect(starId, selectedTag, starEl);
+      } else {
+        markWrong(selectedTag);
+      }
+      clearSelection();
+    }
+  }
+
+  // --- Match result ---
+
+  function markCorrect(starId, tag, starEl) {
+    matched[starId] = true;
+    matchCount++;
+
+    tag.classList.add('matched');
+    tag.classList.remove('selected');
+
+    var star = getStarById(starId);
+
+    // Add matched class to star
+    starEl.classList.add('star-matched');
+    starEl.style.setProperty('--flash-color', star.glowColor);
+
+    // Show name label on star
+    var lbl = document.createElement('div');
+    lbl.className = 'star-placed-name';
+    lbl.textContent = star.name;
+    starEl.appendChild(lbl);
+
+    // Flash
+    flashStar(starId, 400);
+
+    // Update progress
+    document.getElementById('match-count').textContent = matchCount;
+    document.getElementById('progress-bar').style.width = (matchCount / 9 * 100) + '%';
+
+    // Check win
+    if (matchCount === 9) {
+      setTimeout(winGame, 600);
+    }
+  }
+
+  function markWrong(tag) {
+    tag.classList.add('wrong');
+    setTimeout(function () {
+      tag.classList.remove('wrong');
+    }, 400);
+  }
+
+  function winGame() {
+    celebrateAllStars();
+
+    document.getElementById('instruction').textContent = 'Ka rawe! — Wonderful!';
+
+    setTimeout(function () {
+      document.getElementById('success-overlay').classList.add('active');
+      launchFireworks(4000);
+    }, 1200);
+  }
+
+  // Click outside deselects
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.name-tag') && !e.target.closest('.star')) {
+      clearSelection();
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>

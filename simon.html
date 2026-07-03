@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Sequence — Matariki Games</title>
+  <meta name="description" content="Test your memory with the Matariki Star Sequence game — like Simon, but with stars!">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="back-link" id="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back
+      </a>
+      <span class="header-title">Game Two</span>
+    </div>
+  </header>
+
+  <div class="game-area">
+    <div class="container" style="max-width: 640px;">
+
+      <div class="game-status">
+        <h1 class="game-title-small" style="color: var(--accent-purple);">Star Sequence</h1>
+        <p class="game-instruction">
+          Watch the stars flash, then repeat the sequence!
+        </p>
+      </div>
+
+      <div class="status-bar" id="status-bar">
+        <div class="status-item">
+          <span class="status-label">Round</span>
+          <span class="status-value" id="round-display">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Target</span>
+          <span class="status-value" style="color: var(--accent-teal);">20</span>
+        </div>
+      </div>
+
+      <div class="progress-bar-wrap" style="max-width:400px;">
+        <div class="progress-bar-fill" id="progress-bar"></div>
+      </div>
+
+      <div class="simon-status" id="simon-status">Press Start to begin</div>
+
+      <!-- Star cluster -->
+      <div id="cluster" class="cluster-container" style="max-width: 420px;"></div>
+
+      <div style="text-align:center; margin-top: 20px;">
+        <button class="btn btn-primary btn-large" id="btn-start">Start</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Win overlay -->
+<div class="message-overlay" id="win-overlay">
+  <div class="message-box">
+    <div class="message-emoji">🎆</div>
+    <h2 class="message-title" style="color: var(--accent-purple);">Tino Pai!</h2>
+    <p class="message-text">
+      You completed all 20 rounds!<br>
+      Your memory shines as bright as the stars of Matariki.
+    </p>
+    <button class="btn btn-primary btn-large" onclick="location.reload()">Play Again</button>
+    <div style="margin-top:16px;">
+      <a href="index.html" style="font-size:0.9rem;">Back to menu</a>
+    </div>
+  </div>
+</div>
+
+<!-- Game Over overlay -->
+<div class="message-overlay" id="lose-overlay">
+  <div class="message-box">
+    <div class="message-emoji">💫</div>
+    <h2 class="message-title" style="color: var(--accent-gold);">Not Quite!</h2>
+    <p class="message-text" id="lose-text">
+      You reached round <span id="lose-round">0</span>.<br>
+      Keep trying — the stars are waiting!
+    </p>
+    <button class="btn btn-primary btn-large" onclick="location.reload()">Try Again</button>
+    <div style="margin-top:16px;">
+      <a href="index.html" style="font-size:0.9rem;">Back to menu</a>
+    </div>
+  </div>
+</div>
+
+<script src="stars.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var WIN_TARGET = 20;
+
+  // --- State ---
+  var sequence = [];
+  var playerPos = 0;
+  var round = 0;
+  var gamePhase = 'idle'; // idle | watching | playing | gameover
+  var inputLocked = false;
+
+  // --- DOM ---
+  var btnStart       = document.getElementById('btn-start');
+  var roundDisplay   = document.getElementById('round-display');
+  var progressBar    = document.getElementById('progress-bar');
+  var simonStatus    = document.getElementById('simon-status');
+  var winOverlay     = document.getElementById('win-overlay');
+  var loseOverlay    = document.getElementById('lose-overlay');
+  var loseRound      = document.getElementById('lose-round');
+
+  // --- Init ---
+  createStarField();
+  createCluster('cluster', {
+    interactive: true,
+    onStarClick: handleStarClick,
+    baseSize: 6,
+    maxSize: 18
+  });
+
+  btnStart.addEventListener('click', startGame);
+
+  // --- Game flow ---
+
+  function startGame() {
+    sequence = [];
+    round = 0;
+    gamePhase = 'idle';
+    btnStart.style.display = 'none';
+    nextRound();
+  }
+
+  function nextRound() {
+    round++;
+    roundDisplay.textContent = round;
+    progressBar.style.width = (round / WIN_TARGET * 100) + '%';
+
+    // Add a new random star to the sequence
+    var ids = MATARIKI_STARS.map(function (s) { return s.id; });
+    sequence.push(randomFromArray(ids));
+
+    // Play the sequence
+    gamePhase = 'watching';
+    inputLocked = true;
+    simonStatus.textContent = 'Watch carefully...';
+    simonStatus.className = 'simon-status watching';
+
+    setTimeout(function () {
+      playSequence(0);
+    }, 600);
+  }
+
+  function playSequence(index) {
+    if (index >= sequence.length) {
+      // Done playing — player's turn
+      gamePhase = 'playing';
+      playerPos = 0;
+      inputLocked = false;
+      simonStatus.textContent = 'Your turn! Repeat the sequence';
+      simonStatus.className = 'simon-status playing';
+      return;
+    }
+
+    flashStar(sequence[index], 450).then(function () {
+      setTimeout(function () {
+        playSequence(index + 1);
+      }, 150);
+    });
+  }
+
+  function handleStarClick(starId) {
+    if (gamePhase !== 'playing' || inputLocked) return;
+
+    inputLocked = true;
+
+    if (starId === sequence[playerPos]) {
+      // Correct!
+      flashStar(starId, 300).then(function () {
+        playerPos++;
+        inputLocked = false;
+
+        if (playerPos >= sequence.length) {
+          // Completed this round
+          if (round >= WIN_TARGET) {
+            winGame();
+          } else {
+            simonStatus.textContent = 'Correct! Get ready...';
+            simonStatus.className = 'simon-status watching';
+            inputLocked = true;
+            setTimeout(function () {
+              nextRound();
+            }, 1000);
+          }
+        }
+      });
+    } else {
+      // Wrong!
+      gameOver();
+    }
+  }
+
+  function gameOver() {
+    gamePhase = 'gameover';
+    inputLocked = true;
+
+    simonStatus.textContent = 'Wrong star!';
+    simonStatus.className = 'simon-status wrong';
+
+    // Flash the correct star to show what it should have been
+    var correctId = sequence[playerPos];
+    flashStar(correctId, 800).then(function () {
+      setTimeout(function () {
+        loseRound.textContent = round;
+        loseOverlay.classList.add('active');
+      }, 400);
+    });
+  }
+
+  function winGame() {
+    gamePhase = 'gameover';
+    inputLocked = true;
+
+    simonStatus.textContent = 'Incredible!';
+    simonStatus.className = 'simon-status watching';
+
+    celebrateAllStars();
+
+    setTimeout(function () {
+      winOverlay.classList.add('active');
+      launchFireworks(6000);
+    }, 800);
+  }
+
+})();
+</script>
+
+</body>
+</html>

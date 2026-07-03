@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matariki Games — Celebrate the Māori New Year</title>
+  <meta name="description" content="Celebrate Matariki with three interactive games — learn the star names, test your memory, and challenge your reflexes.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1 class="hero-title">Matariki</h1>
+      <p class="hero-subtitle">Celebrate the Māori New Year with the nine stars of Matariki</p>
+      <p class="hero-description">
+        Matariki is the Māori name for the star cluster known as the Pleiades.
+        Its rising in mid-winter marks the beginning of the Māori New Year —
+        a time to remember those who have passed, celebrate the present, and plan for the future.
+      </p>
+    </div>
+  </section>
+
+  <!-- Star cluster display -->
+  <div class="container" style="margin-bottom: 24px;">
+    <div id="hero-cluster" class="cluster-container" style="max-width: 300px; aspect-ratio: 1 / 1;"></div>
+  </div>
+
+  <!-- Games Grid -->
+  <section class="container">
+    <div class="games-grid">
+
+      <a href="match.html" class="game-card" data-game="match" id="card-match">
+        <div class="card-icon">🌟</div>
+        <div class="card-number">Game One</div>
+        <h2 class="card-title">Star Names</h2>
+        <p class="card-desc">
+          Learn the te reo Māori names of the nine Matariki stars. Match each
+          name to the correct star in the cluster.
+        </p>
+        <span class="card-play">
+          Play
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <a href="simon.html" class="game-card" data-game="simon" id="card-simon">
+        <div class="card-icon">🧠</div>
+        <div class="card-number">Game Two</div>
+        <h2 class="card-title">Star Sequence</h2>
+        <p class="card-desc">
+          How good is your memory? Watch the stars flash in sequence, then
+          repeat the pattern. The sequence grows longer each round!
+        </p>
+        <span class="card-play">
+          Play
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <a href="reaction.html" class="game-card" data-game="reaction" id="card-reaction">
+        <div class="card-icon">⚡</div>
+        <div class="card-number">Game Three</div>
+        <h2 class="card-title">Star Reflex</h2>
+        <p class="card-desc">
+          Test your reflexes! A star will light up at a random moment —
+          tap it as quickly as you can and see your reaction time.
+        </p>
+        <span class="card-play">
+          Play
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <p>Matariki Games &middot; Celebrating the Māori New Year</p>
+  </footer>
+
+</div>
+
+<script src="stars.js"></script>
+<script>
+  createStarField();
+  createCluster('hero-cluster', { showLabels: true, baseSize: 8, maxSize: 22 });
+
+  // Gentle periodic flash on the hero cluster
+  (function ambientFlash() {
+    var ids = MATARIKI_STARS.map(function(s) { return s.id; });
+    function flash() {
+      var id = randomFromArray(ids);
+      flashStar(id, 600);
+      setTimeout(flash, Math.random() * 3000 + 2000);
+    }
+    setTimeout(flash, 2000);
+  })();
+</script>
+
+</body>
+</html>

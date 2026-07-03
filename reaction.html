@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Reflex — Matariki Games</title>
+  <meta name="description" content="Test your reaction time — tap the star as fast as you can when it lights up!">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="back-link" id="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Back
+      </a>
+      <span class="header-title">Game Three</span>
+    </div>
+  </header>
+
+  <div class="game-area">
+    <div class="container" style="max-width: 640px;">
+
+      <div class="game-status">
+        <h1 class="game-title-small" style="color: var(--accent-teal);">Star Reflex</h1>
+        <p class="game-instruction">
+          When a star lights up, tap it as fast as you can!
+        </p>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-label">Round</span>
+          <span class="status-value" id="round-display">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Best</span>
+          <span class="status-value" style="color: var(--accent-gold);" id="best-display">—</span>
+        </div>
+      </div>
+
+      <div class="reaction-message" id="reaction-message">Press Start when you're ready</div>
+
+      <div class="timer-display" id="timer-display">0.000s</div>
+      <div class="timer-label" id="timer-label">reaction time</div>
+
+      <!-- Star cluster -->
+      <div id="cluster" class="cluster-container" style="max-width: 420px;"></div>
+
+      <div style="text-align:center; margin-top: 20px;">
+        <button class="btn btn-primary btn-large" id="btn-start">Start</button>
+      </div>
+
+      <!-- Results history -->
+      <div id="results-section" style="display:none; margin-top: 24px;">
+        <div class="name-tags-title" style="text-align:center;">Results</div>
+        <ul class="results-list" id="results-list"></ul>
+        <div style="text-align:center; margin-top:12px;">
+          <span style="font-size:0.85rem; color:var(--text-dim);">Average: </span>
+          <span style="font-size:0.95rem; color:var(--accent-teal); font-weight:600;" id="avg-display">—</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="stars.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // --- State ---
+  var gamePhase = 'idle'; // idle | waiting | ready | result | tooEarly
+  var activeStarId = null;
+  var delayTimeout = null;
+  var flashStartTime = 0;
+  var roundNum = 0;
+  var bestTime = Infinity;
+  var results = [];
+
+  // --- DOM ---
+  var btnStart       = document.getElementById('btn-start');
+  var roundDisplay   = document.getElementById('round-display');
+  var bestDisplay    = document.getElementById('best-display');
+  var reactionMsg    = document.getElementById('reaction-message');
+  var timerDisplay   = document.getElementById('timer-display');
+  var timerLabel     = document.getElementById('timer-label');
+  var resultsSection = document.getElementById('results-section');
+  var resultsList    = document.getElementById('results-list');
+  var avgDisplay     = document.getElementById('avg-display');
+
+  // --- Init ---
+  createStarField();
+  createCluster('cluster', {
+    interactive: true,
+    onStarClick: handleStarClick,
+    baseSize: 6,
+    maxSize: 18
+  });
+
+  // Dim all stars initially
+  dimAllStars();
+
+  btnStart.addEventListener('click', startRound);
+
+  function dimAllStars() {
+    MATARIKI_STARS.forEach(function (s) {
+      var el = document.getElementById('star-' + s.id);
+      if (el) {
+        el.style.opacity = '0.35';
+        el.classList.remove('star-flash');
+      }
+    });
+  }
+
+  function restoreAllStars() {
+    MATARIKI_STARS.forEach(function (s) {
+      var el = document.getElementById('star-' + s.id);
+      if (el) {
+        el.style.opacity = '1';
+        el.classList.remove('star-flash');
+      }
+    });
+  }
+
+  // --- Game flow ---
+
+  function startRound() {
+    roundNum++;
+    roundDisplay.textContent = roundNum;
+    btnStart.style.display = 'none';
+
+    gamePhase = 'waiting';
+    activeStarId = null;
+    dimAllStars();
+
+    reactionMsg.textContent = 'Get ready...';
+    reactionMsg.className = 'reaction-message waiting';
+    timerDisplay.textContent = '—';
+    timerLabel.textContent = 'waiting';
+
+    // Random delay 1–5 seconds
+    var delay = Math.random() * 4000 + 1000;
+    delayTimeout = setTimeout(function () {
+      lightUpStar();
+    }, delay);
+  }
+
+  function lightUpStar() {
+    gamePhase = 'ready';
+
+    // Pick a random star
+    var ids = MATARIKI_STARS.map(function (s) { return s.id; });
+    activeStarId = randomFromArray(ids);
+
+    var star = getStarById(activeStarId);
+    var el = document.getElementById('star-' + activeStarId);
+    if (el) {
+      el.style.opacity = '1';
+      el.classList.add('star-flash');
+      el.style.setProperty('--flash-color', star.glowColor);
+    }
+
+    reactionMsg.textContent = 'TAP THE STAR!';
+    reactionMsg.className = 'reaction-message ready';
+    timerLabel.textContent = 'go!';
+
+    flashStartTime = performance.now();
+  }
+
+  function handleStarClick(starId) {
+    if (gamePhase === 'waiting') {
+      // Too early!
+      clearTimeout(delayTimeout);
+      gamePhase = 'tooEarly';
+
+      reactionMsg.textContent = 'Too early! Wait for a star to light up.';
+      reactionMsg.className = 'reaction-message too-early';
+      timerDisplay.textContent = '✗';
+      timerLabel.textContent = '';
+
+      // Allow retry after a moment
+      setTimeout(function () {
+        btnStart.style.display = '';
+        btnStart.textContent = 'Try Again';
+        roundNum--; // don't count this round
+        roundDisplay.textContent = Math.max(0, roundNum);
+        gamePhase = 'idle';
+      }, 1200);
+
+      return;
+    }
+
+    if (gamePhase !== 'ready') return;
+
+    if (starId !== activeStarId) {
+      // Wrong star — they need to hit the lit one
+      return;
+    }
+
+    // Correct star!
+    var elapsed = performance.now() - flashStartTime;
+    gamePhase = 'result';
+
+    // Turn off the star flash
+    var el = document.getElementById('star-' + activeStarId);
+    if (el) {
+      el.classList.remove('star-flash');
+    }
+
+    restoreAllStars();
+
+    var timeMs = Math.round(elapsed);
+    var timeSec = (elapsed / 1000).toFixed(3);
+
+    timerDisplay.textContent = timeSec + 's';
+    timerLabel.textContent = 'reaction time';
+
+    // Determine message
+    var msg;
+    if (elapsed < 200) {
+      msg = 'Incredible! Lightning fast! ⚡';
+    } else if (elapsed < 350) {
+      msg = 'Amazing reflexes! 🌟';
+    } else if (elapsed < 500) {
+      msg = 'Nice reaction! 👏';
+    } else if (elapsed < 750) {
+      msg = 'Good effort! 💪';
+    } else {
+      msg = 'Keep practising! 🎯';
+    }
+    reactionMsg.textContent = msg;
+    reactionMsg.className = 'reaction-message result';
+
+    // Track best
+    if (elapsed < bestTime) {
+      bestTime = elapsed;
+      bestDisplay.textContent = (bestTime / 1000).toFixed(3) + 's';
+    }
+
+    // Add to results
+    results.push(elapsed);
+    updateResults();
+
+    // Show next button
+    setTimeout(function () {
+      btnStart.style.display = '';
+      btnStart.textContent = 'Next Round';
+      gamePhase = 'idle';
+    }, 800);
+  }
+
+  function updateResults() {
+    resultsSection.style.display = '';
+    resultsList.innerHTML = '';
+
+    var minTime = Math.min.apply(null, results);
+
+    results.forEach(function (time, i) {
+      var li = document.createElement('li');
+
+      var roundSpan = document.createElement('span');
+      roundSpan.className = 'round-num';
+      roundSpan.textContent = 'Round ' + (i + 1);
+
+      var timeSpan = document.createElement('span');
+      timeSpan.className = 'round-time';
+      if (time === minTime && results.length > 1) {
+        timeSpan.classList.add('best');
+        timeSpan.textContent = (time / 1000).toFixed(3) + 's ★';
+      } else {
+        timeSpan.textContent = (time / 1000).toFixed(3) + 's';
+      }
+
+      li.appendChild(roundSpan);
+      li.appendChild(timeSpan);
+      resultsList.appendChild(li);
+    });
+
+    // Average
+    var sum = results.reduce(function (a, b) { return a + b; }, 0);
+    var avg = sum / results.length;
+    avgDisplay.textContent = (avg / 1000).toFixed(3) + 's';
+  }
+
+  // Prevent clicks on cluster area during waiting from bubbling weirdly
+  document.getElementById('cluster').addEventListener('click', function (e) {
+    if (gamePhase === 'waiting') {
+      // Any click during waiting = too early, even on blank space
+      handleStarClick('__none__');
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
